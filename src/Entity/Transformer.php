@@ -25,6 +25,7 @@ use Sonata\PageBundle\Model\PageInterface;
 use Sonata\PageBundle\Model\PageManagerInterface;
 use Sonata\PageBundle\Model\SnapshotInterface;
 use Sonata\PageBundle\Model\SnapshotManagerInterface;
+use Sonata\PageBundle\Model\TransformerExtensionInterface;
 use Sonata\PageBundle\Model\TransformerInterface;
 use Sonata\PageBundle\Serializer\BlockTypeExtractor;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
@@ -48,16 +49,24 @@ final class Transformer implements TransformerInterface
     private array $children = [];
 
     /**
-     * @param ManagerInterface<PageBlockInterface>                          $blockManager
+     * @var TransformerExtensionInterface[]
+     */
+    private array $extensions = [];
+
+    /**
+     * @param ManagerInterface<PageBlockInterface> $blockManager
      * @param SerializerInterface&NormalizerInterface&DenormalizerInterface $serializer
+     * @param iterable<TransformerExtensionInterface> $extensions
      */
     public function __construct(
         private SnapshotManagerInterface $snapshotManager,
-        private PageManagerInterface $pageManager,
-        private ManagerInterface $blockManager,
-        private ManagerRegistry $registry,
-        private ?SerializerInterface $serializer = null,
-    ) {
+        private PageManagerInterface     $pageManager,
+        private ManagerInterface         $blockManager,
+        private ManagerRegistry          $registry,
+        private ?SerializerInterface     $serializer = null,
+        iterable                         $extensions = [],
+    )
+    {
         // NEXT_MAJOR: Remove null support
         if (null === $this->serializer) {
             @trigger_error(\sprintf(
@@ -65,6 +74,8 @@ final class Transformer implements TransformerInterface
                 SerializerInterface::class
             ), \E_USER_DEPRECATED);
         }
+
+        $this->extensions = is_array($extensions) ? $extensions : iterator_to_array($extensions);
     }
 
     public function create(PageInterface $page, ?SnapshotInterface $snapshot = null): SnapshotInterface
@@ -90,6 +101,11 @@ final class Transformer implements TransformerInterface
         $parent = $page->getParent();
         if (null !== $parent) {
             $snapshot->setParentId($parent->getId());
+        }
+
+        // Extension point for additional snapshot setup
+        foreach ($this->extensions as $extension) {
+            $extension->configureSnapshot($snapshot, $page);
         }
 
         // NEXT_MAJOR: Remove null support and method check
@@ -149,6 +165,11 @@ final class Transformer implements TransformerInterface
 
             // need to filter out null values
             $content = array_filter($data, static fn ($v): bool => null !== $v);
+
+            // Extension point for additional content fields
+            foreach ($this->extensions as $extension) {
+                $extension->extendContent($content, $page);
+            }
         }
 
         /** @psalm-suppress ArgumentTypeCoercion */
@@ -169,6 +190,11 @@ final class Transformer implements TransformerInterface
         $page->setDecorate($snapshot->getDecorate());
         $page->setSite($snapshot->getSite());
         $page->setEnabled($snapshot->getEnabled());
+
+        // Extension point for additional page setup
+        foreach ($this->extensions as $extension) {
+            $extension->configurePage($page, $snapshot);
+        }
 
         $content = $snapshot->getContent();
 
@@ -203,6 +229,11 @@ final class Transformer implements TransformerInterface
             $page->setSlug($content['slug'] ?? null);
             $page->setTemplateCode($content['template_code'] ?? null);
             $page->setRequestMethod($content['request_method'] ?? null);
+
+            // Extension point for loading additional content
+            foreach ($this->extensions as $extension) {
+                $extension->loadContent($page, $content);
+            }
 
             if (isset($content['created_at'])) {
                 $createdAt = new \DateTime();
@@ -284,6 +315,11 @@ final class Transformer implements TransformerInterface
             foreach ($content['blocks'] as $child) {
                 $block->addChild($this->loadBlock($child, $page));
             }
+        }
+
+        // Extension point for additional block configuration
+        foreach ($this->extensions as $extension) {
+            $extension->configureBlock($block, $content, $page);
         }
 
         return $block;
