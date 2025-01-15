@@ -313,6 +313,16 @@ final class Transformer implements TransformerInterface
              * @phpstan-var BlockContent $child
              */
             foreach ($content['blocks'] as $child) {
+                $shouldLoad = true;
+                foreach ($this->extensions as $extension) {
+                    if (!$extension->shouldLoadChildBlock($child)) {
+                        $shouldLoad = false;
+                        break;
+                    }
+                }
+                if (!$shouldLoad) {
+                    continue;
+                }
                 $block->addChild($this->loadBlock($child, $page));
             }
         }

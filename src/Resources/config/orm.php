@@ -84,6 +84,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
                 service('sonata.page.manager.block'),
                 service('doctrine'),
                 service('serializer'),
+                tagged_iterator('sonata.page.transformer.extension'),
             ])
 
         ->set('sonata.page.block_type_extractor', BlockTypeExtractor::class)

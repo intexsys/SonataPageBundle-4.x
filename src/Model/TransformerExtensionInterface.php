@@ -27,4 +27,6 @@ interface TransformerExtensionInterface
     public function configureBlock(PageBlockInterface $block, array $content, PageInterface $page): void;
 
     public function loadContent(PageInterface $page, array $content): void;
+
+    public function shouldLoadChildBlock(array $childContent): bool;
 }
