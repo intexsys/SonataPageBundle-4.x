@@ -189,6 +189,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
                 service('sonata.page.cms_manager_selector'),
                 service('sonata.page.site.selector'),
                 service('router.default'),
+                tagged_iterator('sonata.page.router.extension'),
             ])
 
         ->set('sonata.page.route.page.generator', RoutePageGenerator::class)

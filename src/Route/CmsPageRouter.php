@@ -29,12 +29,19 @@ use Symfony\Component\Routing\RouterInterface;
 
 final class CmsPageRouter implements ChainedRouterInterface
 {
+    /**
+     * @var CmsPageRouterExtensionInterface[]
+     */
+    private array $extensions = [];
+
     public function __construct(
         private RequestContext $context,
         private CmsManagerSelectorInterface $cmsSelector,
         private SiteSelectorInterface $siteSelector,
         private RouterInterface $router,
+        iterable $extensions = [],
     ) {
+        $this->extensions = is_array($extensions) ? $extensions : iterator_to_array($extensions);
     }
 
     public function setContext(RequestContext $context): void
@@ -146,13 +153,19 @@ final class CmsPageRouter implements ChainedRouterInterface
 
         $cms->setCurrentPage($page);
 
-        return [
+        $result = [
             '_controller' => 'sonata.page.page_service_manager::execute',
             '_route' => PageInterface::PAGE_ROUTE_CMS_NAME,
             'page' => $page,
             'path' => $pathinfo,
             'params' => [],
         ];
+
+        foreach ($this->extensions as $extension) {
+            $extension->alterMatchResult($result, $page, $pathinfo);
+        }
+
+        return $result;
     }
 
     /**
@@ -165,6 +178,11 @@ final class CmsPageRouter implements ChainedRouterInterface
      */
     private function generateFromPage(PageInterface $page, array $parameters = [], int $referenceType = self::ABSOLUTE_PATH): string
     {
+        // Extension point for URL generation
+        foreach ($this->extensions as $extension) {
+            $parameters = $extension->alterGenerateParameters($parameters, $page);
+        }
+
         // hybrid pages use, by definition, the default routing mechanism
         if ($page->isHybrid()) {
             $routeName = $page->getRouteName();
@@ -207,6 +225,11 @@ final class CmsPageRouter implements ChainedRouterInterface
     {
         if (!isset($parameters['path'])) {
             throw new \RuntimeException('Please provide a `path` parameters');
+        }
+
+        // Extension point for slug parameters
+        foreach ($this->extensions as $extension) {
+            $parameters = $extension->alterSlugParameters($parameters);
         }
 
         $url = $parameters['path'];
